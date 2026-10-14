@@ -36,7 +36,7 @@
 <body>
 
     <div class="radar-hud">
-        <h2>🛰️ MAIDSTONE TACTICAL</h2>
+        <h2>🛰️ MAIDSTONE TACTICAL1</h2>
         <div id="target-count">TRACKING: 0 TARGETS</div>
     </div>
     
@@ -57,9 +57,9 @@
         let aircraftMarkers = {};
 
         async function updateRadar() {
-            // FIXED: Switched to adsb.fi's official open secure endpoint structure
-            // Using the modern v3 spatial mapping syntax to prevent data drops
-            var url = "https://opendata.adsb.fi/api/v3/lat/" + homeLat + "/lon/" + homeLon + "/dist/80";
+            // Switched to ADSB.lol's open API platform - zero CORS blocking on frontend pages
+            // 150 km radius converted to nautical miles is roughly 80 NM
+            var url = "https://adsb.lol" + homeLat + "/" + homeLon + "/80";
             
             try {
                 var response = await fetch(url);
@@ -95,14 +95,14 @@
                                 
                                 // Permanently attach visible text label beside the dot
                                 aircraftMarkers[callsign].bindTooltip(callsign, {
-                                    permanent: true, direction: 'right', className: 'radar-label', offset: [6, 0]
+                                    permanent: true, direction: 'right', className: 'radar-label', offset:
                                 });
                             }
                         }
                     });
                 }
 
-                // Clean up planes that fly away out of range
+                // Clean up planes that leave our tracking radius area
                 for (var key in aircraftMarkers) {
                     if (!activeTargets[key]) {
                         map.removeLayer(aircraftMarkers[key]);
@@ -111,12 +111,12 @@
                 }
 
             } catch (error) {
-                console.error("Radar Error Details:", error);
+                console.error("Radar Sync Interrupted:", error);
                 document.getElementById('target-count').innerText = "RADAR SYNC ERROR";
             }
         }
 
-        // Run radar sweep cycle every 10 seconds
+        // Run radar sweep cycle every 10 seconds automatically
         updateRadar();
         setInterval(updateRadar, 10000);
     </script>
