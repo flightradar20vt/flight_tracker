@@ -1,51 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Private Bearsted Airspace Radar</title>
+    <link rel="stylesheet" href="https://unpkg.com" />
+    <script src="https://unpkg.com"></script>
+    <style>
+        body, html { margin: 0; padding: 0; height: 100%; background: #0b0e14; font-family: monospace; overflow: hidden; }
+        #map { width: 100%; height: 100%; background: #0b0e14; }
+        .radar-hud {
+            position: absolute; top: 20px; left: 20px; z-index: 1000;
+            background: rgba(11, 14, 20, 0.9); color: #00ff66; padding: 15px 20px;
+            border-radius: 6px; border: 1px solid #00ff66;
+            box-shadow: 0 0 15px rgba(0, 255, 102, 0.2); pointer-events: none;
+        }
+        .radar-hud h2 { margin: 0 0 5px 0; font-size: 14px; letter-spacing: 2px; color: #00ff66; }
+        #target-count { font-size: 20px; font-weight: bold; }
+        .leaflet-layer, .leaflet-control-attribution { 
+            filter: invert(100%) hue-rotate(180deg) brightness(40%) contrast(130%) saturate(50%); 
+        }
+        .radar-label {
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            color: #00ff66 !important;
+            font-weight: bold;
+            font-family: monospace;
+            font-size: 11px;
+            text-shadow: 1px 1px 2px #000;
+        }
+        .leaflet-tooltip-right::before { border-right-color: transparent !important; }
+    </style>
+</head>
+<body>
+
+    <div class="radar-hud">
+        <h2>🛰️ MAIDSTONE TACTICAL</h2>
+        <div id="target-count">TRACKING: 0 TARGETS</div>
+    </div>
+    
+    <div id="map"></div>
+
+    <script>
+        const homeLat = 51.274;
+        const homeLon = 0.565;
+
+        const map = L.map('map', { zoomControl: false, attributionControl: false }).setView([homeLat, homeLon], 9);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+        L.circleMarker([homeLat, homeLon], {color: '#00ff66', fillColor: '#00ff66', fillOpacity: 0.6, radius: 6}).addTo(map);
+        L.circle([homeLat, homeLon], {radius: 16093, color: '#00ff66', weight: 1, fill: false, dashArray: '4, 6'}).addTo(map); 
+
+        let aircraftMarkers = {};
+
         async function updateRadar() {
-            // 1. REPAIRED AVIATION ENDPOINT PATH
-            const targetUrl = 'https://adsb.fi' + homeLat + '/' + homeLon + '/150';
-            
-            // 2. REPAIRED PROXY HOST AND ROUTING PARAMETERS
-            const url = 'https://allorigins.win' + encodeURIComponent(targetUrl);
+            // These links are fully typed out out with explicit strings to stop copy-paste breaking them
+            var apiEndpoint = "https://adsb.fi" + homeLat + "/" + homeLon + "/150";
+            var proxiedUrl = "https://allorigins.win" + encodeURIComponent(apiEndpoint);
             
             try {
-                const response = await fetch(url);
-                if (!response.ok) throw new Error("Server communication issue");
+                var response = await fetch(proxiedUrl);
+                if (!response.ok) throw new Error("Connection failed");
                 
-                const rawData = await response.json();
+                var rawData = await response.json();
                 
-                // Safely unpack the contents text string from the proxy server
-                let data;
+                var data;
                 if (typeof rawData.contents === 'string') {
                     data = JSON.parse(rawData.contents);
                 } else {
                     data = rawData.contents;
                 }
                 
-                const count = data && data.ac ? data.ac.length : 0;
-                document.getElementById('target-count').innerText = `TRACKING: ${count} TARGETS`;
+                var count = data && data.ac ? data.ac.length : 0;
+                document.getElementById('target-count').innerText = "TRACKING: " + count + " TARGETS";
                 
-                let activeTargets = {};
+                var activeTargets = {};
 
                 if (data && data.ac) {
-                    data.ac.forEach(aircraft => {
-                        const callsign = (aircraft.flight || aircraft.registration || "UNK").trim();
-                        const lat = aircraft.lat;
-                        const lon = aircraft.lon;
-                        const alt = aircraft.alt_baro ? `${aircraft.alt_baro} FT` : "GND";
-                        const spd = aircraft.gs ? `${Math.round(aircraft.gs)} KTS` : "---";
+                    data.ac.forEach(function(aircraft) {
+                        var callsign = (aircraft.flight || aircraft.registration || "UNK").trim();
+                        var lat = aircraft.lat;
+                        var lon = aircraft.lon;
+                        var alt = aircraft.alt_baro ? aircraft.alt_baro + " FT" : "GND";
+                        var spd = aircraft.gs ? Math.round(aircraft.gs) + " KTS" : "---";
 
                         if (lat && lon) {
                             activeTargets[callsign] = true;
-                            const hudPopup = `<b>ID: ${callsign}</b><br>ALT: ${alt}<br>SPD: ${spd}`;
+                            var hudPopup = "<b>ID: " + callsign + "</b><br>ALT: " + alt + "<br>SPD: " + spd;
 
                             if (aircraftMarkers[callsign]) {
                                 aircraftMarkers[callsign].setLatLng([lat, lon]);
                                 aircraftMarkers[callsign].getPopup().setContent(hudPopup);
                             } else {
-                                // Draw bright tactical radar vector blip
                                 aircraftMarkers[callsign] = L.circleMarker([lat, lon], {
                                     color: '#00ff66', fillColor: '#0b0e14', fillOpacity: 0.9, weight: 2, radius: 6
                                 }).addTo(map).bindPopup(hudPopup);
                                 
-                                // Attach permanent moving text label next to the blip
                                 aircraftMarkers[callsign].bindTooltip(callsign, {
                                     permanent: true, direction: 'right', className: 'radar-label', offset: [5, 0]
                                 });
@@ -54,16 +105,21 @@
                     });
                 }
 
-                // Automatically clear aircraft leaving our 150km grid
-                for (let callsign in aircraftMarkers) {
-                    if (!activeTargets[callsign]) {
-                        map.removeLayer(aircraftMarkers[callsign]);
-                        delete aircraftMarkers[callsign];
+                for (var key in aircraftMarkers) {
+                    if (!activeTargets[key]) {
+                        map.removeLayer(aircraftMarkers[key]);
+                        delete aircraftMarkers[key];
                     }
                 }
 
             } catch (error) {
-                console.error("Radar Sync Interrupted:", error);
+                console.error("Radar Error:", error);
                 document.getElementById('target-count').innerText = "RADAR SYNC ERROR";
             }
         }
+
+        updateRadar();
+        setInterval(updateRadar, 12000);
+    </script>
+</body>
+</html>
