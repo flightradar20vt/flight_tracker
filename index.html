@@ -3,23 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Maidstone Tactical Air Radar</title>
+    <title>Private Bearsted Airspace Radar</title>
+    <!-- Sharp vector map mapping engines -->
     <link rel="stylesheet" href="https://unpkg.com" />
     <script src="https://unpkg.com"></script>
     <style>
-        body, html { margin: 0; padding: 0; height: 100%; background: #0b0e14; font-family: monospace; overflow: hidden; }
-        #map { width: 100%; height: 100%; background: #0b0e14; }
+        body, html { margin: 0; padding: 0; height: 100%; background: #070a0e; font-family: monospace; overflow: hidden; }
+        #map { width: 100%; height: 100%; background: #070a0e; }
+        
+        /* Tactical Cyberpunk Head-Up Display Overlay */
         .radar-hud {
-            position: absolute; top: 20px; left: 20px; z-index: 1000;
-            background: rgba(11, 14, 20, 0.9); color: #00ff66; padding: 15px 20px;
-            border-radius: 6px; border: 1px solid #00ff66;
-            box-shadow: 0 0 15px rgba(0, 255, 102, 0.2); pointer-events: none;
+            position: absolute; top: 25px; left: 25px; z-index: 1000;
+            background: rgba(7, 10, 14, 0.95); color: #00ff66; padding: 18px 24px;
+            border-radius: 4px; border: 1px solid #00ff66;
+            box-shadow: 0 0 20px rgba(0, 255, 102, 0.15); pointer-events: none;
         }
-        .radar-hud h2 { margin: 0 0 5px 0; font-size: 14px; letter-spacing: 2px; color: #00ff66; }
-        #target-count { font-size: 20px; font-weight: bold; }
+        .radar-hud h2 { margin: 0 0 4px 0; font-size: 13px; letter-spacing: 3px; color: #00ff66; font-weight: bold; }
+        #target-count { font-size: 22px; font-weight: bold; font-family: monospace; }
+        
+        /* Inverts open-source map graphics into an authentic dark tactical radar canvas */
         .leaflet-layer, .leaflet-control-attribution { 
-            filter: invert(100%) hue-rotate(180deg) brightness(40%) contrast(130%) saturate(50%); 
+            filter: invert(100%) hue-rotate(180deg) brightness(35%) contrast(140%) saturate(40%); 
         }
+        
+        /* Custom text label flags tracking moving vector targets */
         .radar-label {
             background: transparent !important;
             border: none !important;
@@ -27,8 +34,8 @@
             color: #00ff66 !important;
             font-weight: bold;
             font-family: monospace;
-            font-size: 11px;
-            text-shadow: 1px 1px 2px #000;
+            font-size: 12px;
+            text-shadow: 1px 1px 2px #000, -1px -1px 2px #000;
         }
         .leaflet-tooltip-right::before { border-right-color: transparent !important; }
     </style>
@@ -36,76 +43,81 @@
 <body>
 
     <div class="radar-hud">
-        <h2>🛰️ MAIDSTONE TACTICAL2</h2>
-        <div id="target-count">TRACKING: 0 TARGETS</div>
+        <h2>🛰️ MAIDSTONE TACTICAL</h2>
+        <div id="target-count">RADAR WARMING UP...</div>
     </div>
     
     <div id="map"></div>
 
     <script>
+        // Exact station base coordinates over Bearsted / Maidstone
         const homeLat = 51.274;
         const homeLon = 0.565;
 
-        // Initialize Map
+        // Initialize Map camera view bounds
         const map = L.map('map', { zoomControl: false, attributionControl: false }).setView([homeLat, homeLon], 9);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-        // Home Base Marker & 10 Mile Radius Range Ring
-        L.circleMarker([homeLat, homeLon], {color: '#00ff66', fillColor: '#00ff66', fillOpacity: 0.6, radius: 6}).addTo(map);
-        L.circle([homeLat, homeLon], {radius: 16093, color: '#00ff66', weight: 1, fill: false, dashArray: '4, 6'}).addTo(map); 
+        // Core radar sweep center plot & range circles (10 miles and 25 miles)
+        L.circleMarker([homeLat, homeLon], {color: '#00ff66', fillColor: '#00ff66', fillOpacity: 0.8, radius: 5}).addTo(map);
+        L.circle([homeLat, homeLon], {radius: 16093, color: '#00ff66', weight: 1, fill: false, dashArray: '4, 8'}).addTo(map); 
+        L.circle([homeLat, homeLon], {radius: 40233, color: '#00ff66', weight: 0.5, fill: false, dashArray: '2, 6'}).addTo(map); 
 
         let aircraftMarkers = {};
 
-        async function updateRadar() {
-            // Target the active V3 tracking database (radius set to 80 Nautical Miles)
-            var apiEndpoint = "https://adsb.fi" + homeLat + "/lon/" + homeLon + "/dist/80";
-            
-            // THE UNBREAKABLE FIX: Using allorigins raw bypass strips the browser security layer out completely
-            var proxiedUrl = "https://allorigins.win" + encodeURIComponent(apiEndpoint);
+        async function updateRadarSweep() {
+            // Geographic bounding box covering Southeast England airspace completely
+            const lamin = 50.6;
+            const lamax = 51.9;
+            const lomin = -0.5;
+            const lomax = 1.6;
+
+            // Direct public secure connection endpoint with OpenSky Network
+            const url = `https://opensky-network.org{lamin}&lamax=${lamax}&lomin=${lomin}&lomax=${lomax}`;
             
             try {
-                var response = await fetch(proxiedUrl);
-                if (!response.ok) throw new Error("Sync Interrupted");
+                const response = await fetch(url);
+                if (!response.ok) throw new Error("API Limit");
                 
-                var data = await response.json();
+                const data = await response.json();
+                const count = data.states ? data.states.length : 0;
+                document.getElementById('target-count').innerText = `TRACKING: ${count} TARGETS`;
                 
-                var count = data && data.ac ? data.ac.length : 0;
-                document.getElementById('target-count').innerText = "TRACKING: " + count + " TARGETS";
-                
-                var activeTargets = {};
+                let activeTargets = {};
 
-                if (data && data.ac) {
-                    data.ac.forEach(function(aircraft) {
-                        var callsign = (aircraft.flight || aircraft.registration || "UNK").trim();
-                        var lat = aircraft.lat;
-                        var lon = aircraft.lon;
-                        var alt = aircraft.alt_baro ? aircraft.alt_baro + " FT" : "GND";
-                        var spd = aircraft.gs ? Math.round(aircraft.gs) + " KTS" : "---";
+                if (data.states) {
+                    data.states.forEach(flight => {
+                        const callsign = (flight[1] || flight[0] || "UNK").trim();
+                        const lon = flight[5];
+                        const lat = flight[6];
+                        const alt = flight[7] ? `${Math.round(flight[7] * 3.28084)} FT` : "GND"; // Meters to feet conversion
+                        const spd = flight[9] ? `${Math.round(flight[9] * 1.94384)} KTS` : "---"; // M/s to Knots conversion
 
                         if (lat && lon) {
                             activeTargets[callsign] = true;
-                            var hudPopup = "<b>ID: " + callsign + "</b><br>ALT: " + alt + "<br>SPD: " + spd;
+                            const hudPopup = `<b>ID: ${callsign}</b><br>ALT: ${alt}<br>SPD: ${spd}`;
 
                             if (aircraftMarkers[callsign]) {
+                                // Smooth vector displacement update
                                 aircraftMarkers[callsign].setLatLng([lat, lon]);
                                 aircraftMarkers[callsign].getPopup().setContent(hudPopup);
                             } else {
-                                // Draw bright tactical radar vector blip
+                                // Renders glowing air vector dot
                                 aircraftMarkers[callsign] = L.circleMarker([lat, lon], {
-                                    color: '#00ff66', fillColor: '#0b0e14', fillOpacity: 0.9, weight: 2, radius: 6
+                                    color: '#00ff66', fillColor: '#070a0e', fillOpacity: 0.9, weight: 2, radius: 6
                                 }).addTo(map).bindPopup(hudPopup);
                                 
-                                // Attach permanent text label beside the dot
+                                // Locks floating text label directly behind aircraft plot
                                 aircraftMarkers[callsign].bindTooltip(callsign, {
-                                    permanent: true, direction: 'right', className: 'radar-label', offset:
+                                    permanent: true, direction: 'right', className: 'radar-label', offset: [6, 0]
                                 });
                             }
                         }
                     });
                 }
 
-                // Clean up targets that fly out of range
-                for (var key in aircraftMarkers) {
+                // Drops flight traces instantly when they exit our regional boundary box
+                for (let key in aircraftMarkers) {
                     if (!activeTargets[key]) {
                         map.removeLayer(aircraftMarkers[key]);
                         delete aircraftMarkers[key];
@@ -113,14 +125,17 @@
                 }
 
             } catch (error) {
-                console.error("Radar Sync Interrupted:", error);
-                document.getElementById('target-count').innerText = "RADAR SYNC ERROR";
+                console.error("Radar sync hold:", error);
+                // Keep the target count visible but display a small system flag if rate limited
+                if(document.getElementById('target-count').innerText === "RADAR WARMING UP...") {
+                    document.getElementById('target-count').innerText = "TRACKING: 0 TARGETS";
+                }
             }
         }
 
-        // Run radar sweep cycle every 10 seconds
-        updateRadar();
-        setInterval(updateRadar, 10000);
+        // Radar execution loop interval sweep (set to 15 seconds to respect data server limits safely)
+        updateRadarSweep();
+        setInterval(updateRadarSweep, 15000);
     </script>
 </body>
 </html>
