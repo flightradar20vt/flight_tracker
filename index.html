@@ -22,11 +22,18 @@
 
   let planeMarkers = {};
 
-  async function fetchPlanes() {
+async function fetchPlanes() {
     try {
+     //   const url = "https://cors.opensky-api.xyz/states/all?lamin=49.5&lomin=-8.0&lamax=61.0&lomax=2.0";
+      const url = "https://solitary-grass-616a.long-salad-3a61.workers.dev/?lamin=49.5&lomin=-8.0&lamax=61.0&lomax=2.0";
+
+
+  
+  //async function fetchPlanes() {
+   // try {
       // ADS-B Exchange public feed (UK region)
      // const url = "https://public-api.adsbexchange.com/VirtualRadar/AircraftList.json?lat=51.2726&lng=0.5217&fDstL=0&fDstU=100";
-      const url = "https://cors.opensky-api.xyz/states/all?lamin=49.5&lomin=-8.0&lamax=61.0&lomax=2.0";
+      //const url = "https://cors.opensky-api.xyz/states/all?lamin=49.5&lomin=-8.0&lamax=61.0&lomax=2.0";
 
 
       const response = await fetch(url);
