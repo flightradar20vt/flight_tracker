@@ -43,35 +43,29 @@
     <div id="map"></div>
 
     <script>
-        // Bearsted Center Base Coordinates
         const homeLat = 51.274;
         const homeLon = 0.565;
 
+        // Initialize Map
         const map = L.map('map', { zoomControl: false, attributionControl: false }).setView([homeLat, homeLon], 9);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
+        // Home Base Marker & 10 Mile Radius Range Ring
         L.circleMarker([homeLat, homeLon], {color: '#00ff66', fillColor: '#00ff66', fillOpacity: 0.6, radius: 6}).addTo(map);
         L.circle([homeLat, homeLon], {radius: 16093, color: '#00ff66', weight: 1, fill: false, dashArray: '4, 6'}).addTo(map); 
 
         let aircraftMarkers = {};
 
         async function updateRadar() {
-            // FIXED: Fully upgraded to the active V3 API data routing schema (dist in Nautical Miles, max 250)
-            var apiEndpoint = "https://adsb.fi" + homeLat + "/lon/" + homeLon + "/dist/80";
-            var proxiedUrl = "https://allorigins.win" + encodeURIComponent(apiEndpoint);
+            // Using AvioADSB - natively supports direct browser hits without a proxy server!
+            // 150 km radius converted to nautical miles is roughly 80 NM
+            var url = "https://avioadsb.org" + homeLat + "/lon/" + homeLon + "/dist/80";
             
             try {
-                var response = await fetch(proxiedUrl);
+                var response = await fetch(url);
                 if (!response.ok) throw new Error("Sync Interrupted");
                 
-                var rawData = await response.json();
-                
-                var data;
-                if (typeof rawData.contents === 'string') {
-                    data = JSON.parse(rawData.contents);
-                } else {
-                    data = rawData.contents;
-                }
+                var data = await response.json();
                 
                 var count = data && data.ac ? data.ac.length : 0;
                 document.getElementById('target-count').innerText = "TRACKING: " + count + " TARGETS";
@@ -94,10 +88,12 @@
                                 aircraftMarkers[callsign].setLatLng([lat, lon]);
                                 aircraftMarkers[callsign].getPopup().setContent(hudPopup);
                             } else {
+                                // Draw bright tactical radar blip
                                 aircraftMarkers[callsign] = L.circleMarker([lat, lon], {
                                     color: '#00ff66', fillColor: '#0b0e14', fillOpacity: 0.9, weight: 2, radius: 6
                                 }).addTo(map).bindPopup(hudPopup);
                                 
+                                // Permanently attach visible text label beside the dot
                                 aircraftMarkers[callsign].bindTooltip(callsign, {
                                     permanent: true, direction: 'right', className: 'radar-label', offset: [5, 0]
                                 });
@@ -106,6 +102,7 @@
                     });
                 }
 
+                // Clean up targets that fly away
                 for (var key in aircraftMarkers) {
                     if (!activeTargets[key]) {
                         map.removeLayer(aircraftMarkers[key]);
@@ -119,9 +116,9 @@
             }
         }
 
-        // Radar execution loop sweep
+        // Run radar sweep every 10 seconds
         updateRadar();
-        setInterval(updateRadar, 12000);
+        setInterval(updateRadar, 10000);
     </script>
 </body>
 </html>
