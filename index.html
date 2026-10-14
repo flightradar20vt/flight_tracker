@@ -25,7 +25,9 @@
   async function fetchPlanes() {
     try {
       // Your Cloudflare Worker URL
-      const url = "https://solitary-grass-616a.long-salad-3a61.workers.dev/?lamin=49.5&lomin=-8.0&lamax=61.0&lomax=2.0";
+     // const url = "https://solitary-grass-616a.long-salad-3a61.workers.dev/?lamin=49.5&lomin=-8.0&lamax=61.0&lomax=2.0";
+      const url = "https://solitary-grass-616a.long-salad-3a61.workers.dev/?lamin=40&lomin=-10&lamax=60&lomax=10";
+
 
       const response = await fetch(url);
       const data = await response.json();
