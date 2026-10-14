@@ -46,7 +46,7 @@
         const homeLat = 51.274;
         const homeLon = 0.565;
 
-        // Initialize Map
+        // Initialize Map view over Kent
         const map = L.map('map', { zoomControl: false, attributionControl: false }).setView([homeLat, homeLon], 9);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
@@ -57,8 +57,9 @@
         let aircraftMarkers = {};
 
         async function updateRadar() {
-            // FIXED: Using the exact, keyless AvioADSB point radius path syntax with a safe 85 NM boundary
-            var url = "https://avioadsb.org/v1/point/" + homeLat + "/" + homeLon + "/85";
+            // FIXED URL: Direct link matching AvioADSB's /v1/point/:lat/:lon/:radius schema
+            // 60 Nautical Miles (~70 miles / 110 km radius) covers all of Kent easily
+            var url = "https://avioadsb.org/v1/point/" + homeLat + "/" + homeLon + "/60";
             
             try {
                 var response = await fetch(url);
@@ -87,7 +88,7 @@
                                 aircraftMarkers[callsign].setLatLng([lat, lon]);
                                 aircraftMarkers[callsign].getPopup().setContent(hudPopup);
                             } else {
-                                // Draw bright tactical radar blip
+                                // Draw bright tactical radar vector blip
                                 aircraftMarkers[callsign] = L.circleMarker([lat, lon], {
                                     color: '#00ff66', fillColor: '#0b0e14', fillOpacity: 0.9, weight: 2, radius: 6
                                 }).addTo(map).bindPopup(hudPopup);
@@ -101,7 +102,7 @@
                     });
                 }
 
-                // Clean up targets that fly away
+                // Clean up planes that fly away out of range
                 for (var key in aircraftMarkers) {
                     if (!activeTargets[key]) {
                         map.removeLayer(aircraftMarkers[key]);
@@ -110,12 +111,12 @@
                 }
 
             } catch (error) {
-                console.error("Radar Sync Interrupted:", error);
+                console.error("Radar Error Details:", error);
                 document.getElementById('target-count').innerText = "RADAR SYNC ERROR";
             }
         }
 
-        // Run radar sweep every 12 seconds to fit inside anonymous rate limits safely
+        // Run radar sweep cycle every 12 seconds
         updateRadar();
         setInterval(updateRadar, 12000);
     </script>
