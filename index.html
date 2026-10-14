@@ -10,14 +10,19 @@
 
   async function fetchPlanes() {
     try {
-      // UK-wide bounding box (much more reliable)
       const url = "https://opensky-network.org/api/states/all?lamin=49.5&lomin=-8.0&lamax=61.0&lomax=2.0";
 
       const response = await fetch(url);
+
+      if (!response.ok) {
+        console.log("OpenSky API error:", response.status);
+        return;
+      }
+
       const data = await response.json();
 
       if (!data.states) {
-        console.log("No aircraft returned");
+        console.log("OpenSky returned no aircraft");
         return;
       }
 
@@ -37,8 +42,9 @@
 
         planeMarkers[icao].bindPopup(`Callsign: ${callsign || "Unknown"}`);
       });
+
     } catch (err) {
-      console.error("Error fetching planes:", err);
+      console.log("Fetch failed:", err);
     }
   }
 
