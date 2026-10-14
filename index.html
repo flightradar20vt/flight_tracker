@@ -1,19 +1,6 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Planes Over My House</title>
-  <meta charset="utf-8" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <style>
-    #map { height: 100vh; }
-  </style>
-</head>
-<body>
-<div id="map"></div>
-
 <script>
-  const home = { lat: 53.4808, lon: -2.2426 };
+  // Maidstone town centre coordinates
+  const home = { lat: 51.2726, lon: 0.5217 };
 
   const map = L.map('map').setView([home.lat, home.lon], 11);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -23,7 +10,9 @@
   let planeMarkers = {};
 
   async function fetchPlanes() {
-    const url = "https://opensky-network.org/api/states/all?lamin=53.3&lomin=-2.5&lamax=53.7&lomax=-2.0";
+    // Bounding box around Maidstone (roughly 20–25 km radius)
+    const url = "https://opensky-network.org/api/states/all?lamin=51.10&lomin=0.30&lamax=51.40&lomax=0.75";
+
     const response = await fetch(url);
     const data = await response.json();
 
@@ -50,5 +39,3 @@
   fetchPlanes();
   setInterval(fetchPlanes, 5000);
 </script>
-</body>
-</html>
