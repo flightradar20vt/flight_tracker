@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Private Bearsted Airspace Radar</title>
+    <title>Maidstone Tactical Air Radar</title>
     <link rel="stylesheet" href="https://unpkg.com" />
     <script src="https://unpkg.com"></script>
     <style>
@@ -36,7 +36,7 @@
 <body>
 
     <div class="radar-hud">
-        <h2>🛰️ MAIDSTONE TACTICAL1</h2>
+        <h2>🛰️ MAIDSTONE TACTICAL2</h2>
         <div id="target-count">TRACKING: 0 TARGETS</div>
     </div>
     
@@ -46,7 +46,7 @@
         const homeLat = 51.274;
         const homeLon = 0.565;
 
-        // Initialize Map view over Kent
+        // Initialize Map
         const map = L.map('map', { zoomControl: false, attributionControl: false }).setView([homeLat, homeLon], 9);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
@@ -57,12 +57,14 @@
         let aircraftMarkers = {};
 
         async function updateRadar() {
-            // Switched to ADSB.lol's open API platform - zero CORS blocking on frontend pages
-            // 150 km radius converted to nautical miles is roughly 80 NM
-            var url = "https://adsb.lol" + homeLat + "/" + homeLon + "/80";
+            // Target the active V3 tracking database (radius set to 80 Nautical Miles)
+            var apiEndpoint = "https://adsb.fi" + homeLat + "/lon/" + homeLon + "/dist/80";
+            
+            // THE UNBREAKABLE FIX: Using allorigins raw bypass strips the browser security layer out completely
+            var proxiedUrl = "https://allorigins.win" + encodeURIComponent(apiEndpoint);
             
             try {
-                var response = await fetch(url);
+                var response = await fetch(proxiedUrl);
                 if (!response.ok) throw new Error("Sync Interrupted");
                 
                 var data = await response.json();
@@ -93,7 +95,7 @@
                                     color: '#00ff66', fillColor: '#0b0e14', fillOpacity: 0.9, weight: 2, radius: 6
                                 }).addTo(map).bindPopup(hudPopup);
                                 
-                                // Permanently attach visible text label beside the dot
+                                // Attach permanent text label beside the dot
                                 aircraftMarkers[callsign].bindTooltip(callsign, {
                                     permanent: true, direction: 'right', className: 'radar-label', offset:
                                 });
@@ -102,7 +104,7 @@
                     });
                 }
 
-                // Clean up planes that leave our tracking radius area
+                // Clean up targets that fly out of range
                 for (var key in aircraftMarkers) {
                     if (!activeTargets[key]) {
                         map.removeLayer(aircraftMarkers[key]);
@@ -116,7 +118,7 @@
             }
         }
 
-        // Run radar sweep cycle every 10 seconds automatically
+        // Run radar sweep cycle every 10 seconds
         updateRadar();
         setInterval(updateRadar, 10000);
     </script>
