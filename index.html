@@ -57,9 +57,9 @@
         let aircraftMarkers = {};
 
         async function updateRadar() {
-            // FIXED URL: Direct link matching AvioADSB's /v1/point/:lat/:lon/:radius schema
-            // 60 Nautical Miles (~70 miles / 110 km radius) covers all of Kent easily
-            var url = "https://avioadsb.org/v1/point/" + homeLat + "/" + homeLon + "/60";
+            // FIXED: Switched to adsb.fi's official open secure endpoint structure
+            // Using the modern v3 spatial mapping syntax to prevent data drops
+            var url = "https://opendata.adsb.fi/api/v3/lat/" + homeLat + "/lon/" + homeLon + "/dist/80";
             
             try {
                 var response = await fetch(url);
@@ -95,7 +95,7 @@
                                 
                                 // Permanently attach visible text label beside the dot
                                 aircraftMarkers[callsign].bindTooltip(callsign, {
-                                    permanent: true, direction: 'right', className: 'radar-label', offset: [5, 0]
+                                    permanent: true, direction: 'right', className: 'radar-label', offset: [6, 0]
                                 });
                             }
                         }
@@ -116,9 +116,9 @@
             }
         }
 
-        // Run radar sweep cycle every 12 seconds
+        // Run radar sweep cycle every 10 seconds
         updateRadar();
-        setInterval(updateRadar, 12000);
+        setInterval(updateRadar, 10000);
     </script>
 </body>
 </html>
