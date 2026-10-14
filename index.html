@@ -12,7 +12,7 @@
 <body>
 <div id="map"></div>
 
-<script>
+  <script>
   const home = { lat: 51.2726, lon: 0.5217 };
 
   const map = L.map('map').setView([home.lat, home.lon], 9);
@@ -22,44 +22,35 @@
 
   let planeMarkers = {};
 
-async function fetchPlanes() {
+  async function fetchPlanes() {
     try {
-     //   const url = "https://cors.opensky-api.xyz/states/all?lamin=49.5&lomin=-8.0&lamax=61.0&lomax=2.0";
       const url = "https://solitary-grass-616a.long-salad-3a61.workers.dev/?lamin=49.5&lomin=-8.0&lamax=61.0&lomax=2.0";
-
-
-  
-  //async function fetchPlanes() {
-   // try {
-      // ADS-B Exchange public feed (UK region)
-     // const url = "https://public-api.adsbexchange.com/VirtualRadar/AircraftList.json?lat=51.2726&lng=0.5217&fDstL=0&fDstU=100";
-      //const url = "https://cors.opensky-api.xyz/states/all?lamin=49.5&lomin=-8.0&lamax=61.0&lomax=2.0";
-
 
       const response = await fetch(url);
       const data = await response.json();
 
-      if (!data.acList || data.acList.length === 0) {
+      if (!data.states || data.states.length === 0) {
         console.log("No aircraft found");
         return;
       }
 
-      data.acList.forEach(plane => {
-        const id = plane.Id;
-        const lat = plane.Lat;
-        const lon = plane.Long;
-        const callsign = plane.Call || "Unknown";
+      data.states.forEach(state => {
+        const icao = state[0];
+        const callsign = state[1];
+        const lon = state[5];
+        const lat = state[6];
 
         if (!lat || !lon) return;
 
-        if (!planeMarkers[id]) {
-          planeMarkers[id] = L.marker([lat, lon]).addTo(map);
+        if (!planeMarkers[icao]) {
+          planeMarkers[icao] = L.marker([lat, lon]).addTo(map);
         } else {
-          planeMarkers[id].setLatLng([lat, lon]);
+          planeMarkers[icao].setLatLng([lat, lon]);
         }
 
-        planeMarkers[id].bindPopup(`Callsign: ${callsign}`);
+        planeMarkers[icao].bindPopup(`Callsign: ${callsign || "Unknown"}`);
       });
+
     } catch (err) {
       console.error("Error fetching planes:", err);
     }
@@ -68,5 +59,8 @@ async function fetchPlanes() {
   fetchPlanes();
   setInterval(fetchPlanes, 10000);
 </script>
+
+
+  
 </body>
 </html>
