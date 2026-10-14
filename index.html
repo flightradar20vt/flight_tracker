@@ -29,40 +29,53 @@
     
     <div id="map"></div>
     
-    <script>
-        // Center of the map over Bearsted / Kent area
+       <script>
+        // Center map over Bearsted / Kent area
         const homeLat = 51.274;
         const homeLon = 0.565;
 
-        // Initialize map
+        // Initialize map without clutter
         const map = L.map('map', { zoomControl: false, attributionControl: false }).setView([homeLat, homeLon], 10);
+        
+        // Add map textures
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-        // Home Base Pin
-        L.circleMarker([homeLat, homeLon], {color: '#0088ff', radius: 8}).addTo(map);
+        // Home Base Marker
+        L.circleMarker([homeLat, homeLon], {color: '#0088ff', fillColor: '#0088ff', fillOpacity: 0.4, radius: 8}).addTo(map);
+        L.circle([homeLat, homeLon], {radius: 8046, color: '#0088ff', weight: 1, fill: false, dashArray: '5, 5'}).addTo(map); // 5-mile boundary
 
         let flightMarkers = {};
 
         async function fetchFlights() {
-            // Pulling data from adsb.fi's open boundary radius tool
-            const url = `https://adsb.fi{homeLat}/${homeLon}/40`;
+            // Coordinate boundaries roughly covering Kent/Maidstone
+            const lamin = 51.0;
+            const lamax = 51.5;
+            const lomin = 0.2;
+            const lomax = 0.9;
+
+            const targetUrl = `https://opensky-network.org{lamin}&lamax=${lamax}&lomin=${lomin}&lomax=${lomax}`;
+            
+            // WEAPON OF CHOICE: Appending corsproxy.io strips away the browser block
+            const proxiedUrl = `https://corsproxy.io{encodeURIComponent(targetUrl)}`;
             
             try {
-                const response = await fetch(url);
+                const response = await fetch(proxiedUrl);
+                if (!response.ok) throw new Error("Network response failed");
+                
                 const data = await response.json();
                 
-                const count = data.ac ? data.ac.length : 0;
+                const count = data.states ? data.states.length : 0;
                 document.getElementById('flight-count').innerText = `${count} PLANES OVERHEAD`;
                 
                 let currentFlights = {};
 
-                if (data.ac) {
-                    data.ac.forEach(flight => {
-                        const callsign = (flight.flight || flight.registration || "UNK").trim();
-                        const lat = flight.lat;
-                        const lon = flight.lon;
-                        const alt = flight.alt_baro ? `${flight.alt_baro} ft` : "---";
-                        const spd = flight.gs ? `${Math.round(flight.gs)} kts` : "---";
+                if (data.states) {
+                    data.states.forEach(flight => {
+                        const callsign = (flight[1] || "UNK").trim();
+                        const lon = flight[5];
+                        const lat = flight[6];
+                        const alt = flight[7] ? `${Math.round(flight[7] * 3.28084)} ft` : "---"; // Metres to feet
+                        const spd = flight[9] ? `${Math.round(flight[9] * 1.94384)} kts` : "---"; // M/s to knots
 
                         if (lat && lon) {
                             currentFlights[callsign] = true;
@@ -70,16 +83,17 @@
 
                             if (flightMarkers[callsign]) {
                                 flightMarkers[callsign].setLatLng([lat, lon]);
+                                flightMarkers[callsign].getPopup().setContent(popupText);
                             } else {
                                 flightMarkers[callsign] = L.circleMarker([lat, lon], {
-                                    color: '#00ffaa', fillColor: '#00ffaa', fillOpacity: 0.8, radius: 5
+                                    color: '#00ffaa', fillColor: '#00ffaa', fillOpacity: 0.8, radius: 6
                                 }).addTo(map).bindPopup(popupText);
                             }
                         }
                     });
                 }
 
-                // Remove planes that flew away
+                // Remove planes that exited our coordinates
                 for (let callsign in flightMarkers) {
                     if (!currentFlights[callsign]) {
                         map.removeLayer(flightMarkers[callsign]);
@@ -88,13 +102,14 @@
                 }
 
             } catch (error) {
-                console.error("Fetch error:", error);
-                document.getElementById('flight-count').innerText = "FETCH FAILED";
+                console.error("CORS Proxy Error:", error);
+                document.getElementById('flight-count').innerText = "DATA ERROR / RATE LIMIT";
             }
         }
 
+        // Fetch flights immediately, then every 20 seconds to prevent OpenSky blocking your IP address
         fetchFlights();
-        setInterval(fetchFlights, 10000);
+        setInterval(fetchFlights, 20000);
     </script>
 
 
