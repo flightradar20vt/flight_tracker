@@ -1,7 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Planes Over Maidstone</title>
+  <meta charset="utf-8" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <style>
+    #map { height: 100vh; }
+  </style>
+</head>
+<body>
+<div id="map"></div>
+
 <script>
   const home = { lat: 51.2726, lon: 0.5217 };
 
-  const map = L.map('map').setView([home.lat, home.lon], 10);
+  const map = L.map('map').setView([home.lat, home.lon], 9);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 18
   }).addTo(map);
@@ -10,44 +24,40 @@
 
   async function fetchPlanes() {
     try {
-      const url = "https://opensky-network.org/api/states/all?lamin=49.5&lomin=-8.0&lamax=61.0&lomax=2.0";
+      // ADS-B Exchange public feed (UK region)
+      const url = "https://public-api.adsbexchange.com/VirtualRadar/AircraftList.json?lat=51.2726&lng=0.5217&fDstL=0&fDstU=100";
 
       const response = await fetch(url);
-
-      if (!response.ok) {
-        console.log("OpenSky API error:", response.status);
-        return;
-      }
-
       const data = await response.json();
 
-      if (!data.states) {
-        console.log("OpenSky returned no aircraft");
+      if (!data.acList || data.acList.length === 0) {
+        console.log("No aircraft found");
         return;
       }
 
-      data.states.forEach(state => {
-        const icao = state[0];
-        const callsign = state[1];
-        const lon = state[5];
-        const lat = state[6];
+      data.acList.forEach(plane => {
+        const id = plane.Id;
+        const lat = plane.Lat;
+        const lon = plane.Long;
+        const callsign = plane.Call || "Unknown";
 
         if (!lat || !lon) return;
 
-        if (!planeMarkers[icao]) {
-          planeMarkers[icao] = L.marker([lat, lon]).addTo(map);
+        if (!planeMarkers[id]) {
+          planeMarkers[id] = L.marker([lat, lon]).addTo(map);
         } else {
-          planeMarkers[icao].setLatLng([lat, lon]);
+          planeMarkers[id].setLatLng([lat, lon]);
         }
 
-        planeMarkers[icao].bindPopup(`Callsign: ${callsign || "Unknown"}`);
+        planeMarkers[id].bindPopup(`Callsign: ${callsign}`);
       });
-
     } catch (err) {
-      console.log("Fetch failed:", err);
+      console.error("Error fetching planes:", err);
     }
   }
 
   fetchPlanes();
-  setInterval(fetchPlanes, 5000);
+  setInterval(fetchPlanes, 10000);
 </script>
+</body>
+</html>
