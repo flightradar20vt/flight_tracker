@@ -24,25 +24,21 @@
 
   async function fetchPlanes() {
     try {
-      // Your Cloudflare Worker URL
-     // const url = "https://solitary-grass-616a.long-salad-3a61.workers.dev/?lamin=49.5&lomin=-8.0&lamax=61.0&lomax=2.0";
       const url = "https://solitary-grass-616a.long-salad-3a61.workers.dev/?lamin=40&lomin=-10&lamax=60&lomax=10";
-
 
       const response = await fetch(url);
       const data = await response.json();
 
-      // OpenSky format uses "states"
       if (!data.states || data.states.length === 0) {
         console.log("No aircraft found");
         return;
       }
 
       data.states.forEach(state => {
-        const icao = state[0];     // ICAO hex
-        const callsign = state[1]; // Callsign
-        const lon = state[5];      // Longitude
-        const lat = state[6];      // Latitude
+        const icao = state[0];
+        const callsign = state[1];
+        const lon = state[5];
+        const lat = state[6];
 
         if (!lat || !lon) return;
 
