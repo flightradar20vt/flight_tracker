@@ -2,79 +2,138 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <title>Private Bearsted Airspace Radar</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Maidstone Tactical Radar Terminal</title>
+    <!-- Include Open-Source Mapping Engines -->
+    <link rel="stylesheet" href="https://unpkg.com" />
+    <script src="https://unpkg.com"></script>
     <style>
-        /* Creates a strict full-screen boundary box so no web borders show */
-        html, body {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            background-color: #0c0f12;
-            overflow: hidden;
-            font-family: monospace;
-        }
-
-        /* Displays the full-screen tactical tracking engine */
-        .radar-frame {
-            width: 100%;
-            height: 100%;
-            border: none;
-            background-color: #0c0f12;
-        }
-
-        /* Clean cyber HUD text box overlaid precisely on top of the map layer */
+        body, html { margin: 0; padding: 0; height: 100%; background: #06090d; font-family: monospace; overflow: hidden; }
+        #map { width: 100%; height: 100%; background: #06090d; }
+        
+        /* Tactical Glowing HUD Overlay */
         .radar-hud {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            z-index: 9999;
-            background: rgba(12, 15, 18, 0.95);
-            color: #00ff66;
-            padding: 12px 20px;
-            border-radius: 6px;
-            border: 1px solid rgba(0, 255, 102, 0.3);
-            box-shadow: 0 4px 20px rgba(0,0,0,0.7);
-            pointer-events: none; /* Allows you to touch and move the map underneath the text */
-            letter-spacing: 2px;
+            position: absolute; top: 25px; left: 25px; z-index: 1000;
+            background: rgba(6, 9, 13, 0.95); color: #00ff66; padding: 15px 22px;
+            border-radius: 4px; border: 1px solid #00ff66;
+            box-shadow: 0 0 15px rgba(0, 255, 102, 0.2); pointer-events: none;
         }
-
-        .radar-hud h2 {
-            margin: 0;
-            font-size: 11px;
-            color: #8ab4f8;
-            text-transform: uppercase;
+        .radar-hud h2 { margin: 0 0 4px 0; font-size: 13px; letter-spacing: 2px; color: #00ff66; font-weight: bold; }
+        #target-count { font-size: 22px; font-weight: bold; }
+        
+        /* Dynamic Graphic Shader: Turns regular maps into a Dark Aviation Radar canvas */
+        .leaflet-layer, .leaflet-control-attribution { 
+            filter: invert(100%) hue-rotate(180deg) brightness(30%) contrast(140%) saturate(40%); 
         }
-
-        .radar-hud p {
-            margin: 4px 0 0 0;
-            font-size: 18px;
+        
+        /* Minimalist green text labels tracking vector plots */
+        .radar-label {
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            color: #00ff66 !important;
             font-weight: bold;
+            font-family: monospace;
+            font-size: 12px;
+            text-shadow: 1px 1px 2px #000, -1px -1px 2px #000;
         }
+        .leaflet-tooltip-right::before { border-right-color: transparent !important; }
     </style>
 </head>
 <body>
 
-    <!-- Onboard Dashboard Head-Up Display -->
     <div class="radar-hud">
         <h2>🛰️ MAIDSTONE TACTICAL</h2>
-        <p>LIVE RADAR ACTIVE</p>
+        <div id="target-count">RADAR INITIALISING...</div>
     </div>
+    
+    <div id="map"></div>
 
-    <!-- 
-      THE SYSTEM OVERRIDE:
-      This directly embeds an open-source, clutter-free flight tracking engine.
-      - Automatically centers exactly over Bearsted/Maidstone coordinates.
-      - Sets a perfect regional tracking height (zoom=10).
-      - Applies an elegant dark tactical color profile out of the box.
-      - 'hideSidebar' strips all advertisements, buttons, and commercial clutter completely!
-    -->
-    <iframe 
-        class="radar-frame" 
-        src="https://adsbexchange.com" 
-        allow="geolocation">
-    </iframe>
+    <script>
+        // Exact station base coordinates over Bearsted / Maidstone
+        const homeLat = 51.274;
+        const homeLon = 0.565;
 
+        // Initialize Map View (Zoom level 9 captures Kent perfectly)
+        const map = L.map('map', { zoomControl: false, attributionControl: false }).setView([homeLat, homeLon], 9);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+        // Core radar sweep center target & 10-mile range ring boundary
+        L.circleMarker([homeLat, homeLon], {color: '#00ff66', fillColor: '#00ff66', fillOpacity: 0.8, radius: 5}).addTo(map);
+        L.circle([homeLat, homeLon], {radius: 16093, color: '#00ff66', weight: 1, fill: false, dashArray: '4, 8'}).addTo(map); 
+
+        let aircraftMarkers = {};
+
+        async function sweepRadar() {
+            // High-capacity coordinate bounding box surrounding Kent completely
+            // lamin, lomin, lamax, lomax
+            const lamin = 50.7;
+            const lamax = 51.8;
+            const lomin = -0.4;
+            const lomax = 1.5;
+
+            const url = `https://opensky-network.org{lamin}&lamax=${lamax}&lomin=${lomin}&lomax=${lomax}`;
+            
+            try {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error("Rate hold");
+                
+                const data = await response.json();
+                const count = data.states ? data.states.length : 0;
+                document.getElementById('target-count').innerText = `TRACKING: ${count} TARGETS`;
+                
+                let activeTargets = {};
+
+                if (data.states) {
+                    data.states.forEach(flight => {
+                        const callsign = (flight[1] || flight[0] || "UNK").trim();
+                        const lon = flight[5];
+                        const lat = flight[6];
+                        const alt = flight[7] ? `${Math.round(flight[7] * 3.28084)} FT` : "GND"; // Metres to feet
+                        const spd = flight[9] ? `${Math.round(flight[9] * 1.94384)} KTS` : "---"; // M/s to knots
+
+                        if (lat && lon) {
+                            activeTargets[callsign] = true;
+                            const popupContent = `<b>ID: ${callsign}</b><br>ALT: ${alt}<br>SPD: ${spd}`;
+
+                            if (aircraftMarkers[callsign]) {
+                                // Update existing target positions smoothly
+                                aircraftMarkers[callsign].setLatLng([lat, lon]);
+                                aircraftMarkers[callsign].getPopup().setContent(popupContent);
+                            } else {
+                                // Plot new glowing radar blip
+                                aircraftMarkers[callsign] = L.circleMarker([lat, lon], {
+                                    color: '#00ff66', fillColor: '#06090d', fillOpacity: 0.9, weight: 2, radius: 6
+                                }).addTo(map).bindPopup(popupContent);
+                                
+                                // Attach text label right next to the blip
+                                aircraftMarkers[callsign].bindTooltip(callsign, {
+                                    permanent: true, direction: 'right', className: 'radar-label', offset: [5, 0]
+                                });
+                            }
+                        }
+                    });
+                }
+
+                // Clean up any targets that exit our search grid area
+                for (let key in aircraftMarkers) {
+                    if (!activeTargets[key]) {
+                        map.removeLayer(aircraftMarkers[key]);
+                        delete aircraftMarkers[key];
+                    }
+                }
+
+            } catch (error) {
+                console.error("Radar refresh hold:", error);
+                if(document.getElementById('target-count').innerText === "RADAR INITIALISING...") {
+                    document.getElementById('target-count').innerText = "TRACKING: 0 TARGETS";
+                }
+            }
+        }
+
+        // Run automated sweep cycle every 15 seconds to respect server thresholds
+        sweepRadar();
+        setInterval(sweepRadar, 15000);
+    </script>
 </body>
 </html>
