@@ -57,9 +57,8 @@
         let aircraftMarkers = {};
 
         async function updateRadar() {
-            // Using AvioADSB - natively supports direct browser hits without a proxy server!
-            // 150 km radius converted to nautical miles is roughly 80 NM
-            var url = "https://avioadsb.org" + homeLat + "/lon/" + homeLon + "/dist/80";
+            // FIXED: Using the exact, keyless AvioADSB point radius path syntax with a safe 85 NM boundary
+            var url = "https://avioadsb.org/v1/point/" + homeLat + "/" + homeLon + "/85";
             
             try {
                 var response = await fetch(url);
@@ -116,9 +115,9 @@
             }
         }
 
-        // Run radar sweep every 10 seconds
+        // Run radar sweep every 12 seconds to fit inside anonymous rate limits safely
         updateRadar();
-        setInterval(updateRadar, 10000);
+        setInterval(updateRadar, 12000);
     </script>
 </body>
 </html>
