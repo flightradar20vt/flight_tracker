@@ -43,6 +43,7 @@
     <div id="map"></div>
 
     <script>
+        // Bearsted Center Base Coordinates
         const homeLat = 51.274;
         const homeLon = 0.565;
 
@@ -55,13 +56,13 @@
         let aircraftMarkers = {};
 
         async function updateRadar() {
-            // These links are fully typed out out with explicit strings to stop copy-paste breaking them
-            var apiEndpoint = "https://adsb.fi" + homeLat + "/" + homeLon + "/150";
+            // FIXED: Fully upgraded to the active V3 API data routing schema (dist in Nautical Miles, max 250)
+            var apiEndpoint = "https://adsb.fi" + homeLat + "/lon/" + homeLon + "/dist/80";
             var proxiedUrl = "https://allorigins.win" + encodeURIComponent(apiEndpoint);
             
             try {
                 var response = await fetch(proxiedUrl);
-                if (!response.ok) throw new Error("Connection failed");
+                if (!response.ok) throw new Error("Sync Interrupted");
                 
                 var rawData = await response.json();
                 
@@ -113,11 +114,12 @@
                 }
 
             } catch (error) {
-                console.error("Radar Error:", error);
+                console.error("Radar Sync Interrupted:", error);
                 document.getElementById('target-count').innerText = "RADAR SYNC ERROR";
             }
         }
 
+        // Radar execution loop sweep
         updateRadar();
         setInterval(updateRadar, 12000);
     </script>
