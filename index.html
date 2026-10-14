@@ -1,133 +1,54 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Maidstone Tactical Radar Terminal</title>
-    <link rel="stylesheet" href="https://unpkg.com" />
-    <script src="https://unpkg.com"></script>
-    <style>
-        body, html { margin: 0; padding: 0; height: 100%; background: #06090d; font-family: monospace; overflow: hidden; }
-        #map { width: 100%; height: 100%; background: #06090d; }
-        
-        .radar-hud {
-            position: absolute; top: 25px; left: 25px; z-index: 1000;
-            background: rgba(6, 9, 13, 0.95); color: #00ff66; padding: 15px 22px;
-            border-radius: 4px; border: 1px solid #00ff66;
-            box-shadow: 0 0 15px rgba(0, 255, 102, 0.2); pointer-events: none;
-        }
-        .radar-hud h2 { margin: 0 0 4px 0; font-size: 13px; letter-spacing: 2px; color: #00ff66; font-weight: bold; }
-        #target-count { font-size: 22px; font-weight: bold; }
-        
-        .leaflet-layer, .leaflet-control-attribution { 
-            filter: invert(100%) hue-rotate(180deg) brightness(30%) contrast(140%) saturate(40%); 
-        }
-        
-        .radar-label {
-            background: transparent !important;
-            border: none !important;
-            box-shadow: none !important;
-            color: #00ff66 !important;
-            font-weight: bold;
-            font-family: monospace;
-            font-size: 12px;
-            text-shadow: 1px 1px 2px #000, -1px -1px 2px #000;
-        }
-        .leaflet-tooltip-right::before { border-right-color: transparent !important; }
-    </style>
+  <title>Planes Over My House</title>
+  <meta charset="utf-8" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <style>
+    #map { height: 100vh; }
+  </style>
 </head>
 <body>
+<div id="map"></div>
 
-    <div class="radar-hud">
-        <h2>🛰️ MAIDSTONE TACTICAL</h2>
-        <div id="target-count">RADAR INITIALISING again...</div>
-    </div>
-    
-    <div id="map"></div>
+<script>
+  const home = { lat: 53.4808, lon: -2.2426 };
 
-    <script>
-        const homeLat = 51.274;
-        const homeLon = 0.565;
+  const map = L.map('map').setView([home.lat, home.lon], 11);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 18
+  }).addTo(map);
 
-        // Initialize Map View over Kent
-        const map = L.map('map', { zoomControl: false, attributionControl: false }).setView([homeLat, homeLon], 9);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+  let planeMarkers = {};
 
-        // Home Base Marker & 10-mile range ring
-        L.circleMarker([homeLat, homeLon], {color: '#00ff66', fillColor: '#00ff66', fillOpacity: 0.8, radius: 5}).addTo(map);
-        L.circle([homeLat, homeLon], {radius: 16093, color: '#00ff66', weight: 1, fill: false, dashArray: '4, 8'}).addTo(map); 
+  async function fetchPlanes() {
+    const url = "https://opensky-network.org/api/states/all?lamin=53.3&lomin=-2.5&lamax=53.7&lomax=-2.0";
+    const response = await fetch(url);
+    const data = await response.json();
 
-        let aircraftMarkers = {};
+    if (!data.states) return;
 
-        async function sweepRadar() {
-            // Coordinate boundaries surrounding Kent completely
-            const lamin = 50.7;
-            const lamax = 51.8;
-            const lomin = -0.4;
-            const lomax = 1.5;
+    data.states.forEach(state => {
+      const icao = state[0];
+      const lat = state[6];
+      const lon = state[5];
+      const callsign = state[1];
 
-            const targetUrl = `https://opensky-network.org{lamin}&lamax=${lamax}&lomin=${lomin}&lomax=${lomax}`;
-            
-            // THE CORS FIX: Wrapping the destination address with corsproxy.io drops the browser block instantly
-            const proxiedUrl = `https://corsproxy.io{encodeURIComponent(targetUrl)}`;
-            
-            try {
-                const response = await fetch(proxiedUrl);
-                if (!response.ok) throw new Error("API Connection Failed");
-                
-                const data = await response.json();
-                const count = data.states ? data.states.length : 0;
-                document.getElementById('target-count').innerText = `TRACKING: ${count} TARGETS`;
-                
-                let activeTargets = {};
+      if (!lat || !lon) return;
 
-                if (data.states) {
-                    data.states.forEach(flight => {
-                        const callsign = (flight[1] || flight[0] || "UNK").trim();
-                        const lon = flight[5];
-                        const lat = flight[6];
-                        const alt = flight[7] ? `${Math.round(flight[7] * 3.28084)} FT` : "GND"; // Metres to feet conversion
-                        const spd = flight[9] ? `${Math.round(flight[9] * 1.94384)} KTS` : "---"; // Metres/sec to knots conversion
+      if (!planeMarkers[icao]) {
+        planeMarkers[icao] = L.marker([lat, lon]).addTo(map);
+      } else {
+        planeMarkers[icao].setLatLng([lat, lon]);
+      }
 
-                        if (lat && lon) {
-                            activeTargets[callsign] = true;
-                            const popupContent = `<b>ID: ${callsign}</b><br>ALT: ${alt}<br>SPD: ${spd}`;
+      planeMarkers[icao].bindPopup(`Callsign: ${callsign || "Unknown"}`);
+    });
+  }
 
-                            if (aircraftMarkers[callsign]) {
-                                aircraftMarkers[callsign].setLatLng([lat, lon]);
-                                aircraftMarkers[callsign].getPopup().setContent(popupContent);
-                            } else {
-                                // Draw bright tactical radar blip
-                                aircraftMarkers[callsign] = L.circleMarker([lat, lon], {
-                                    color: '#00ff66', fillColor: '#06090d', fillOpacity: 0.9, weight: 2, radius: 6
-                                }).addTo(map).bindPopup(popupContent);
-                                
-                                // Attach permanent text label next to the blip
-                                aircraftMarkers[callsign].bindTooltip(callsign, {
-                                    permanent: true, direction: 'right', className: 'radar-label', offset: [5, 0]
-                                });
-                            }
-                        }
-                    });
-                }
-
-                // Purge aircraft that fly out of range
-                for (let key in aircraftMarkers) {
-                    if (!activeTargets[key]) {
-                        map.removeLayer(aircraftMarkers[key]);
-                        delete aircraftMarkers[key];
-                    }
-                }
-
-            } catch (error) {
-                console.error("Radar refresh hold:", error);
-                document.getElementById('target-count').innerText = "RADAR SYNC ERROR";
-            }
-        }
-
-        // Run automated sweep cycle every 20 seconds to prevent hitting OpenSky rate limits
-        sweepRadar();
-        setInterval(sweepRadar, 20000);
-    </script>
+  fetchPlanes();
+  setInterval(fetchPlanes, 5000);
+</script>
 </body>
 </html>
