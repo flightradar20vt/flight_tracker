@@ -2,77 +2,131 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <title>Bearsted Live Radar Terminal</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Private Bearsted Airspace Radar</title>
+    <!-- Leaflet Map Engine -->
+    <link rel="stylesheet" href="https://unpkg.com" />
+    <script src="https://unpkg.com"></script>
     <style>
-        /* Force a total fullscreen kiosk bounding box with no scroll bars */
-        html, body {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            background-color: #141a22;
-            overflow: hidden;
-            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+        body, html { margin: 0; padding: 0; height: 100%; background: #0b0e14; font-family: monospace; overflow: hidden; }
+        #map { width: 100%; height: 100%; background: #0b0e14; }
+        
+        /* Custom Tactical HUD Overlay */
+        .radar-hud {
+            position: absolute; top: 20px; left: 20px; z-index: 1000;
+            background: rgba(11, 14, 20, 0.9); color: #00ff66; padding: 15px 20px;
+            border-radius: 6px; border: 1px solid #00ff66;
+            box-shadow: 0 0 15px rgba(0, 255, 102, 0.2); pointer-events: none;
         }
-
-        /* Borderless container for the tracking engine */
-        .radar-frame {
-            width: 100%;
-            height: 100%;
-            border: none;
-        }
-
-        /* Minimalist HUD banner layered neatly on top of the map */
-        .kiosk-hud {
-            position: absolute;
-            top: 15px;
-            left: 15px;
-            z-index: 9999;
-            background: rgba(10, 15, 24, 0.9);
-            color: #00ffaa;
-            padding: 10px 18px;
-            border-radius: 8px;
-            border: 1px solid rgba(0, 255, 170, 0.2);
-            box-shadow: 0 4px 15px rgba(0,0,0,0.6);
-            pointer-events: none; /* Allows you to tap the map underneath the text box */
-            letter-spacing: 1px;
-        }
-
-        .kiosk-hud h1 {
-            margin: 0;
-            font-size: 12px;
-            text-transform: uppercase;
-            color: #8ab4f8;
-        }
-
-        .kiosk-hud p {
-            margin: 3px 0 0 0;
-            font-size: 16px;
-            font-family: monospace;
-            font-weight: bold;
+        .radar-hud h2 { margin: 0 0 5px 0; font-size: 14px; letter-spacing: 2px; color: #00ff66; }
+        #target-count { font-size: 20px; font-weight: bold; }
+        
+        /* Custom CSS Map Inversion to turn standard maps into Dark Radar Mode */
+        .leaflet-layer, .leaflet-control-attribution { 
+            filter: invert(100%) hue-rotate(180deg) brightness(40%) contrast(130%) saturate(50%); 
         }
     </style>
 </head>
 <body>
 
-    <!-- Onboard Dashboard Head-Up Display -->
-    <div class="kiosk-hud">
-        <h1>🛰️ Standalone Terminal</h1>
-        <p>KENT AIRSPACE</p>
+    <div class="radar-hud">
+        <h2>🛰️ MAIDSTONE TACTICAL</h2>
+        <div id="target-count">TRACKING: 0 TARGETS</div>
     </div>
+    
+    <div id="map"></div>
 
-    <!-- 
-      This embeds the high-efficiency tracking engine.
-      - lat/lon are set directly to the middle of Bearsted/Maidstone
-      - zoom is set to 10 (perfect for regional views)
-      - hideSidebar drops the clutter for clean kiosk displays
-    -->
-    <iframe 
-        class="radar-frame" 
-        src="https://adsb.fi" 
-        allow="geolocation">
-    </iframe>
+    <script>
+        // Coordinates for Bearsted / Maidstone
+        const homeLat = 51.274;
+        const homeLon = 0.565;
 
+        // Initialize Map
+        const map = L.map('map', { zoomControl: false, attributionControl: false }).setView([homeLat, homeLon], 10);
+        
+        // OpenStreetMap Base (will be inverted to Dark Mode via CSS above)
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+        // Home Base Marker & 10 Mile Radius Range Ring
+        L.circleMarker([homeLat, homeLon], {color: '#00ff66', fillColor: '#00ff66', fillOpacity: 0.6, radius: 6}).addTo(map);
+        L.circle([homeLat, homeLon], {radius: 16093, color: '#00ff66', weight: 1, fill: false, dashArray: '4, 6'}).addTo(map); 
+
+        let aircraftMarkers = {};
+
+        async function updateRadar() {
+            // Using a reliable open data network mirror that allows browser connections
+            const url = 'https://allorigins.win' + encodeURIComponent('https://adsb.fi' + homeLat + '/' + homeLon + '/45');
+            
+            try {
+                const response = await fetch(url);
+                const rawData = await response.json();
+                const data = JSON.parse(rawData.contents);
+                
+                const count = data.ac ? data.ac.length : 0;
+                document.getElementById('target-count').innerText = `TRACKING: ${count} TARGETS`;
+                
+                let activeTargets = {};
+
+                if (data.ac) {
+                    data.ac.forEach(aircraft => {
+                        const callsign = (aircraft.flight || aircraft.registration || "UNK").trim();
+                        const lat = aircraft.lat;
+                        const lon = aircraft.lon;
+                        const alt = aircraft.alt_baro ? `${aircraft.alt_baro} FT` : "GND";
+                        const spd = aircraft.gs ? `${Math.round(aircraft.gs)} KTS` : "---";
+
+                        if (lat && lon) {
+                            activeTargets[callsign] = true;
+                            const hudPopup = `<b>ID: ${callsign}</b><br>ALT: ${alt}<br>SPD: ${spd}`;
+
+                            if (aircraftMarkers[callsign]) {
+                                // Smoothly update position
+                                aircraftMarkers[callsign].setLatLng([lat, lon]);
+                                aircraftMarkers[callsign].getPopup().setContent(hudPopup);
+                            } else {
+                                // Create glowing radar vector dot
+                                aircraftMarkers[callsign] = L.circleMarker([lat, lon], {
+                                    color: '#00ff66', fillColor: '#0b0e14', fillOpacity: 0.9, weight: 2, radius: 6
+                                }).addTo(map).bindPopup(hudPopup);
+                                
+                                // Automatically draw callsign label next to the dot
+                                aircraftMarkers[callsign].bindTooltip(callsign, {permanent: true, direction: 'right', className: 'radar-label', offset: [5, 0]});
+                            }
+                        }
+                    });
+                }
+
+                // Purge targets that leave Kent airspace
+                for (let callsign in aircraftMarkers) {
+                    if (!activeTargets[callsign]) {
+                        map.removeLayer(aircraftMarkers[callsign]);
+                        delete aircraftMarkers[callsign];
+                    }
+                }
+
+            } catch (error) {
+                console.error("Radar Sync Interrupted:", error);
+            }
+        }
+
+        // Run radar sweep every 10 seconds
+        updateRadar();
+        setInterval(updateRadar, 10000);
+    </script>
+
+    <style>
+        /* Custom styling to make the aircraft text labels look like a real radar screen */
+        .radar-label {
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            color: #00ff66 !important;
+            font-weight: bold;
+            font-family: monospace;
+            font-size: 11px;
+            text-shadow: 1px 1px 2px #000;
+        }
+        .leaflet-tooltip-right::before { border-right-color: transparent !important; }
+    </style>
 </body>
 </html>
