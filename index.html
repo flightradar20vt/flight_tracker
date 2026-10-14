@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Planes Over Maidstone1</title>
+  <title>Planes Over Maidstone (FR24)</title>
   <meta charset="utf-8" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
@@ -15,7 +15,7 @@
 <script>
   const home = { lat: 51.2726, lon: 0.5217 };
 
-  const map = L.map('map').setView([home.lat, home.lon], 9);
+  const map = L.map('map').setView([home.lat, home.lon], 8);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 18
   }).addTo(map);
@@ -24,21 +24,24 @@
 
   async function fetchPlanes() {
     try {
-      const url = "https://solitary-grass-616a.long-salad-3a61.workers.dev/?lamin=40&lomin=-10&lamax=60&lomax=10";
+      const url = "https://solitary-grass-616a.long-salad-3a61.workers.dev/";
 
       const response = await fetch(url);
       const data = await response.json();
 
-      if (!data.states || data.states.length === 0) {
-        console.log("No aircraft found");
-        return;
-      }
+      Object.keys(data).forEach(key => {
+        const plane = data[key];
 
-      data.states.forEach(state => {
-        const icao = state[0];
-        const callsign = state[1];
-        const lon = state[5];
-        const lat = state[6];
+        // FR24 aircraft entries are arrays, skip metadata keys
+        if (!Array.isArray(plane)) return;
+
+        const icao = key;
+        const lat = plane[1];
+        const lon = plane[2];
+        const heading = plane[3];
+        const altitude = plane[4];
+        const speed = plane[5];
+        const callsign = plane[16] || "Unknown";
 
         if (!lat || !lon) return;
 
@@ -48,7 +51,12 @@
           planeMarkers[icao].setLatLng([lat, lon]);
         }
 
-        planeMarkers[icao].bindPopup(`Callsign: ${callsign || "Unknown"}`);
+        planeMarkers[icao].bindPopup(`
+          Callsign: ${callsign}<br>
+          Altitude: ${altitude} ft<br>
+          Speed: ${speed} kt<br>
+          Heading: ${heading}
+        `);
       });
 
     } catch (err) {
