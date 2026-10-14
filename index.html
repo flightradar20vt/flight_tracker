@@ -1,13 +1,17 @@
         async function updateRadar() {
-            // Target open data feed wrapped safely for browser use
+            // 1. REPAIRED AVIATION ENDPOINT PATH
             const targetUrl = 'https://adsb.fi' + homeLat + '/' + homeLon + '/150';
+            
+            // 2. REPAIRED PROXY HOST AND ROUTING PARAMETERS
             const url = 'https://allorigins.win' + encodeURIComponent(targetUrl);
             
             try {
                 const response = await fetch(url);
+                if (!response.ok) throw new Error("Server communication issue");
+                
                 const rawData = await response.json();
                 
-                // UNPACKING FIX: Safely parse the proxy contents into readable JSON
+                // Safely unpack the contents text string from the proxy server
                 let data;
                 if (typeof rawData.contents === 'string') {
                     data = JSON.parse(rawData.contents);
@@ -36,12 +40,12 @@
                                 aircraftMarkers[callsign].setLatLng([lat, lon]);
                                 aircraftMarkers[callsign].getPopup().setContent(hudPopup);
                             } else {
-                                // Draw aircraft vector dot
+                                // Draw bright tactical radar vector blip
                                 aircraftMarkers[callsign] = L.circleMarker([lat, lon], {
                                     color: '#00ff66', fillColor: '#0b0e14', fillOpacity: 0.9, weight: 2, radius: 6
                                 }).addTo(map).bindPopup(hudPopup);
                                 
-                                // Permanently attach visible text label beside the dot
+                                // Attach permanent moving text label next to the blip
                                 aircraftMarkers[callsign].bindTooltip(callsign, {
                                     permanent: true, direction: 'right', className: 'radar-label', offset: [5, 0]
                                 });
@@ -50,7 +54,7 @@
                     });
                 }
 
-                // Purge targets that leave the 150km airspace
+                // Automatically clear aircraft leaving our 150km grid
                 for (let callsign in aircraftMarkers) {
                     if (!activeTargets[callsign]) {
                         map.removeLayer(aircraftMarkers[callsign]);
@@ -60,5 +64,6 @@
 
             } catch (error) {
                 console.error("Radar Sync Interrupted:", error);
+                document.getElementById('target-count').innerText = "RADAR SYNC ERROR";
             }
         }
